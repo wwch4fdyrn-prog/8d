@@ -1,0 +1,1141 @@
+  <!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>8D-Report VDA Tool – Juracom</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    h1, h2 { margin-top: 20px; }
+    fieldset { margin-bottom: 20px; border: 1px solid #ccc; padding: 10px; }
+    legend { font-weight: bold; }
+    label { display: block; margin-top: 8px; font-size: 14px; }
+    textarea, input, select { width: 100%; box-sizing: border-box; padding: 6px; font-size: 14px; }
+    .two-column { display: flex; gap: 10px; }
+    .two-column > div { flex: 1; }
+    .error { color: red; font-weight: bold; }
+    .ok { color: green; font-weight: bold; }
+    .toolbar { margin: 20px 0; padding: 10px; background: #f5f5f5; border-radius: 4px; }
+    button { margin-right: 10px; padding: 8px 16px; cursor: pointer; }
+
+    /* PDF-Layout Styles */
+    #pdfLayout {
+      position: relative;
+    }
+    .watermark {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) rotate(-45deg);
+      font-size: 80px;
+      color: rgba(255, 0, 0, 0.15);
+      font-weight: bold;
+      pointer-events: none;
+      z-index: 1000;
+      white-space: nowrap;
+    }
+    .vda-section {
+      border: 1px solid #000;
+      margin-bottom: 3mm;
+      page-break-inside: avoid;
+    }
+    .vda-header {
+      background: #eee;
+      font-weight: bold;
+      font-size: 9px;
+      padding: 2px 3px;
+      border-bottom: 1px solid #000;
+    }
+    .vda-body {
+      padding: 2px 3px;
+      min-height: 12mm;
+      font-size: 8px;
+      word-wrap: break-word;
+    }
+  </style>
+
+  <!-- SheetJS für Excel-Export -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <!-- html2pdf für PDF-Export -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+</head>
+<body>
+  <h1 data-i18n="title">VDA 8D-Report Tool – Juracom</h1>
+  <p data-i18n="subtitle">Erfassen, prüfen und exportieren von 8D-Reports (Kunde / Lieferant, VDA-konform, D4/D5 separiert).</p>
+
+  <div class="toolbar">
+    <label for="langSelect"><strong data-i18n="lang.label">Sprache / Language / 语言:</strong></label>
+    <select id="langSelect" onchange="setLanguage(this.value)" style="width: 200px; margin-bottom: 10px;">
+      <option value="de">Deutsch</option>
+      <option value="en">English</option>
+      <option value="zh">中文</option>
+    </select>
+    <br>
+    <button type="button" onclick="validateReport()" data-i18n="buttons.validate">Report prüfen</button>
+    <button type="button" onclick="exportPDF()" data-i18n="buttons.pdf">Als PDF exportieren</button>
+    <button type="button" onclick="exportExcel()" data-i18n="buttons.excel">Als Excel exportieren</button>
+    <button type="button" onclick="unlockFullVersion()">Spende-Code</button>
+    <span id="validationResult"></span>
+  </div>
+
+  <!-- Beispiel-Fälle -->
+  <div style="margin-bottom:15px;">
+    <span data-i18n="examples.label"><strong>Beispielfall wählen:</strong></span>
+    <button type="button" onclick="loadExample(1)" title="unterirdisch">💩</button>
+    <button type="button" onclick="loadExample(2)" title="schwach">⚠️</button>
+    <button type="button" onclick="loadExample(3)" title="mittel">➖</button>
+    <button type="button" onclick="loadExample(4)" title="gut">👍</button>
+    <button type="button" onclick="loadExample(5)" title="hervorragend">🏆</button>
+  </div>
+
+  <!-- Formular 8D -->
+  <form id="form8D">
+    <!-- Meta / Kopf -->
+    <fieldset>
+      <legend data-i18n="head.stammdaten">Stammdaten / Kopf</legend>
+      <div class="two-column">
+        <div>
+          <label data-i18n="head.role">Rolle:</label>
+          <select id="role" name="role">
+            <option value="kunde" data-i18n="role.customer">Kunde</option>
+            <option value="lieferant" data-i18n="role.supplier">Lieferant</option>
+            <option value="intern" data-i18n="role.internal">Intern</option>
+          </select>
+        </div>
+        <div>
+          <label data-i18n="head.reportId">8D-Nummer / Reklamationsnummer:</label>
+          <input type="text" id="reportId" name="reportId" />
+        </div>
+      </div>
+
+      <div class="two-column">
+        <div>
+          <label data-i18n="head.customer">Kunde:</label>
+          <input type="text" id="customer" name="customer" />
+        </div>
+        <div>
+          <label data-i18n="head.supplier">Lieferant:</label>
+          <input type="text" id="supplier" name="supplier" />
+        </div>
+      </div>
+
+      <div class="two-column">
+        <div>
+          <label data-i18n="head.date">Datum:</label>
+          <input type="date" id="date" name="date" />
+        </div>
+        <div>
+          <label data-i18n="head.partNumber">Teil / Artikel / Zeichnungsnummer:</label>
+          <input type="text" id="partNumber" name="partNumber" />
+        </div>
+      </div>
+    </fieldset>
+
+    <!-- D1 -->
+    <fieldset>
+      <legend data-i18n="d1.title">D1 – Team</legend>
+      <label data-i18n="d1.desc">Teammitglieder / Funktionen:</label>
+      <textarea id="d1_team" rows="3"></textarea>
+    </fieldset>
+
+    <!-- D2 -->
+    <fieldset>
+      <legend data-i18n="d2.title">D2 – Problembeschreibung</legend>
+      <label data-i18n="d2.desc">Problembeschreibung (Was, Wo, Wann, Wie viele, etc.):</label>
+      <textarea id="d2_problem" rows="4"></textarea>
+    </fieldset>
+
+    <!-- D3 -->
+    <fieldset>
+      <legend data-i18n="d3.title">D3 – Sofortmaßnahmen (Containment)</legend>
+      <label data-i18n="d3.desc">Getroffene Sofortmaßnahmen:</label>
+      <textarea id="d3_containment" rows="3"></textarea>
+    </fieldset>
+
+    <!-- D4 -->
+    <fieldset>
+      <legend data-i18n="d4.title">D4 – Ursachenanalyse (Occurrence / Detection separiert)</legend>
+
+      <div style="margin-bottom:8px;">
+        <button type="button" onclick="toggleFishbone()" data-i18n="d4.fishbone_btn">Fishbone (Ishikawa) öffnen</button>
+        <button type="button" onclick="toggleFiveWhy()" data-i18n="d4.why_btn">5 Why öffnen</button>
+      </div>
+
+      <label data-i18n="d4.tua_label">Technische Ursachen – Auftreten (TUA):</label>
+      <textarea id="d4_tua" rows="3"></textarea>
+
+      <label data-i18n="d4.tun_label">Technische Ursachen – Nicht-Entdecken (TUN):</label>
+      <textarea id="d4_tun" rows="3"></textarea>
+
+      <label data-i18n="d4.sua_label">Systemische Ursachen – Auftreten (SUA):</label>
+      <textarea id="d4_sua" rows="3"></textarea>
+
+      <label data-i18n="d4.sun_label">Systemische Ursachen – Nicht-Entdecken (SUN):</label>
+      <textarea id="d4_sun" rows="3"></textarea>
+
+      <!-- Fishbone Bereich -->
+      <div id="fishboneSection" style="display:none; margin-top:10px; border:1px dashed #999; padding:8px;">
+        <strong data-i18n="d4.fishbone_title">Fishbone / Ishikawa (Text-Form)</strong>
+        <p data-i18n="d4.fishbone_hint">Nutzen Sie die 6M (Mensch, Maschine, Material, Methode, Milieu, Messung), um mögliche Ursachen zu sammeln.</p>
+        <div class="two-column">
+          <div>
+            <label data-i18n="d4.fb_man">Mensch (Man):</label>
+            <textarea id="fb_man" rows="2"></textarea>
+            <label data-i18n="d4.fb_machine">Maschine (Machine):</label>
+            <textarea id="fb_machine" rows="2"></textarea>
+            <label data-i18n="d4.fb_material">Material:</label>
+            <textarea id="fb_material" rows="2"></textarea>
+          </div>
+          <div>
+            <label data-i18n="d4.fb_method">Methode (Method):</label>
+            <textarea id="fb_method" rows="2"></textarea>
+            <label data-i18n="d4.fb_env">Umgebung (Milieu/Environment):</label>
+            <textarea id="fb_env" rows="2"></textarea>
+            <label data-i18n="d4.fb_measure">Messung (Measurement):</label>
+            <textarea id="fb_measure" rows="2"></textarea>
+          </div>
+        </div>
+      </div>
+
+      <!-- 5-Why Bereich -->
+      <div id="fiveWhySection" style="display:none; margin-top:10px; border:1px dashed #999; padding:8px;">
+        <strong data-i18n="d4.why_title">5 Why Analyse</strong>
+        <p data-i18n="d4.why_hint">Beginnen Sie mit dem Symptom und fragen Sie fünfmal „Warum?“.</p>
+        <label data-i18n="d4.why1">Warum 1:</label>
+        <textarea id="why1" rows="2"></textarea>
+        <label data-i18n="d4.why2">Warum 2:</label>
+        <textarea id="why2" rows="2"></textarea>
+        <label data-i18n="d4.why3">Warum 3:</label>
+        <textarea id="why3" rows="2"></textarea>
+        <label data-i18n="d4.why4">Warum 4:</label>
+        <textarea id="why4" rows="2"></textarea>
+        <label data-i18n="d4.why5">Warum 5 (Root Cause):</label>
+        <textarea id="why5" rows="2"></textarea>
+      </div>
+    </fieldset>
+
+    <!-- D5 -->
+    <fieldset>
+      <legend data-i18n="d5.title">D5 – Dauerhafte Abstellmaßnahmen</legend>
+      <div class="two-column">
+        <div>
+          <label data-i18n="d5.occ_label">Occurrence (Auftreten verhindern):</label>
+          <textarea id="d5_occurrence" rows="4"></textarea>
+        </div>
+        <div>
+          <label data-i18n="d5.det_label">Detection (Erkennung verbessern):</label>
+          <textarea id="d5_detection" rows="4"></textarea>
+        </div>
+      </div>
+    </fieldset>
+
+    <!-- D6 MIT TABELLE -->
+    <fieldset>
+      <legend data-i18n="d6.title">D6 – Umsetzung der Maßnahmen</legend>
+      <p data-i18n="d6.desc">Umzusetzende Maßnahmen inkl. Verantwortlicher und Termin:</p>
+
+      <button type="button" onclick="addD6Row()" data-i18n="d6.add_btn">+ Maßnahme hinzufügen</button>
+
+      <table id="d6_table" style="width:100%; border-collapse:collapse; margin-top:10px;">
+        <thead>
+          <tr style="background:#eee;">
+            <th style="border:1px solid #ccc; padding:4px;" data-i18n="d6.col_action">Maßnahme</th>
+            <th style="border:1px solid #ccc; padding:4px; width:150px;" data-i18n="d6.col_responsible">Verantwortlicher</th>
+            <th style="border:1px solid #ccc; padding:4px; width:120px;" data-i18n="d6.col_date">Termin</th>
+            <th style="border:1px solid #ccc; padding:4px; width:100px;" data-i18n="d6.col_status">Status</th>
+            <th style="border:1px solid #ccc; padding:4px; width:50px;"></th>
+          </tr>
+        </thead>
+        <tbody id="d6_tbody">
+          <!-- Zeilen werden dynamisch hinzugefügt -->
+        </tbody>
+      </table>
+    </fieldset>
+
+    <!-- D7 -->
+    <fieldset>
+      <legend data-i18n="d7.title">D7 – Vorbeugende Maßnahmen / Lessons Learned</legend>
+      <label data-i18n="d7.desc">Übertrag auf ähnliche Produkte / Prozesse, Standards, FMEAs:</label>
+      <textarea id="d7_preventive" rows="4"></textarea>
+    </fieldset>
+
+    <!-- D8 -->
+    <fieldset>
+      <legend data-i18n="d8.title">D8 – Erfolgskontrolle und Abschluss</legend>
+      <label data-i18n="d8.verif">Nachweis der Wirksamkeit (Daten, Messwerte, Reklamationsrückgang, etc.):</label>
+      <textarea id="d8_verification" rows="4"></textarea>
+      <label data-i18n="d8.closure">Teamwürdigung / Abschluss:</label>
+      <textarea id="d8_closure" rows="2"></textarea>
+    </fieldset>
+  </form>
+
+  <!-- PDF-Layout (für Export) -->
+  <div id="pdfLayout" style="display:none; font-family: Arial, sans-serif; font-size:10px;">
+    <!-- Wasserzeichen -->
+    <div id="watermark" class="watermark" data-i18n="watermark.text">DEMO - Nicht bezahlt</div>
+
+    <div id="pdfPage" style="width:210mm; min-height:297mm; padding:10mm; box-sizing:border-box; position: relative;">
+
+      <!-- Kopfbereich -->
+      <table style="width:100%; border-collapse:collapse; margin-bottom:4mm;">
+        <tr>
+          <td style="width:25%; border:1px solid #000; text-align:center; padding:2mm; vertical-align:middle;">
+            <div style="font-weight:bold; font-size:14px;">Juracom</div>
+            <div style="font-size:8px;">Logo</div>
+          </td>
+          <td style="width:50%; border-top:1px solid #000; border-bottom:1px solid #000; text-align:center; vertical-align:middle;">
+            <div style="font-weight:bold; font-size:14px;">8D-REPORT</div>
+            <div style="font-size:8px;" data-i18n="pdf.subtitle">nach VDA-Standard</div>
+          </td>
+          <td style="width:25%; border:1px solid #000; font-size:8px; padding:2mm; vertical-align:top;">
+            <div><strong data-i18n="pdf.reportId">8D-Nr.:</strong> <span id="pdf_reportId"></span></div>
+            <div><strong data-i18n="pdf.date">Datum:</strong> <span id="pdf_date"></span></div>
+          </td>
+        </tr>
+      </table>
+
+      <!-- Stammdaten -->
+      <table style="width:100%; border-collapse:collapse; margin-bottom:3mm; font-size:8px;">
+        <tr>
+          <td style="border:1px solid #000; padding:1mm;">
+            <strong data-i18n="pdf.customer">Kunde:</strong> <span id="pdf_customer"></span>
+          </td>
+          <td style="border:1px solid #000; padding:1mm;">
+            <strong data-i18n="pdf.supplier">Lieferant:</strong> <span id="pdf_supplier"></span>
+          </td>
+          <td style="border:1px solid #000; padding:1mm;">
+            <strong data-i18n="pdf.partNumber">Teil / Zeichnungsnr.:</strong> <span id="pdf_partNumber"></span>
+          </td>
+        </tr>
+      </table>
+
+      <!-- D1 -->
+      <div class="vda-section">
+        <div class="vda-header" data-i18n="d1.title">D1 – Team</div>
+        <div class="vda-body" id="pdf_d1"></div>
+      </div>
+
+      <!-- D2 -->
+      <div class="vda-section">
+        <div class="vda-header" data-i18n="d2.title">D2 – Problembeschreibung</div>
+        <div class="vda-body" id="pdf_d2"></div>
+      </div>
+
+      <!-- D3 -->
+      <div class="vda-section">
+        <div class="vda-header" data-i18n="d3.title">D3 – Sofortmaßnahmen</div>
+        <div class="vda-body" id="pdf_d3"></div>
+      </div>
+
+      <!-- D4 -->
+      <div class="vda-section">
+        <div class="vda-header" data-i18n="pdf.d4_title">D4 – Ursachenanalyse (TUA / TUN / SUA / SUN)</div>
+        <table style="width:100%; border-collapse:collapse; font-size:8px;">
+          <tr>
+            <td style="border:1px solid #000; width:25%; vertical-align:top; padding:1mm;">
+              <strong data-i18n="d4.tua">TUA</strong><br>
+              <div id="pdf_d4_tua"></div>
+            </td>
+            <td style="border:1px solid #000; width:25%; vertical-align:top; padding:1mm;">
+              <strong data-i18n="d4.tun">TUN</strong><br>
+              <div id="pdf_d4_tun"></div>
+            </td>
+            <td style="border:1px solid #000; width:25%; vertical-align:top; padding:1mm;">
+              <strong data-i18n="d4.sua">SUA</strong><br>
+              <div id="pdf_d4_sua"></div>
+            </td>
+            <td style="border:1px solid #000; width:25%; vertical-align:top; padding:1mm;">
+              <strong data-i18n="d4.sun">SUN</strong><br>
+              <div id="pdf_d4_sun"></div>
+            </td>
+          </tr>
+        </table>
+      </div>
+
+      <!-- D5 -->
+      <div class="vda-section">
+        <div class="vda-header" data-i18n="d5.title">D5 – Dauerhafte Abstellmaßnahmen</div>
+        <table style="width:100%; border-collapse:collapse; font-size:8px;">
+          <tr>
+            <td style="border:1px solid #000; width:50%; vertical-align:top; padding:1mm;">
+              <strong data-i18n="d5.occ">Occurrence (Auftreten verhindern)</strong><br>
+              <div id="pdf_d5_occurrence"></div>
+            </td>
+            <td style="border:1px solid #000; width:50%; vertical-align:top; padding:1mm;">
+              <strong data-i18n="d5.det">Detection (Entdeckung verbessern)</strong><br>
+              <div id="pdf_d5_detection"></div>
+            </td>
+          </tr>
+        </table>
+      </div>
+
+      <!-- D6 -->
+      <div class="vda-section">
+        <div class="vda-header" data-i18n="d6.title">D6 – Umsetzung der Maßnahmen</div>
+        <div class="vda-body" id="pdf_d6"></div>
+      </div>
+
+      <!-- D7 -->
+      <div class="vda-section">
+        <div class="vda-header" data-i18n="d7.title">D7 – Vorbeugende Maßnahmen</div>
+        <div class="vda-body" id="pdf_d7"></div>
+      </div>
+
+      <!-- D8 -->
+      <div class="vda-section">
+        <div class="vda-header" data-i18n="d8.title">D8 – Erfolgskontrolle / Abschluss</div>
+        <div class="vda-body">
+          <strong data-i18n="d8.verif">Wirksamkeitsnachweis:</strong><br>
+          <div id="pdf_d8_verification" style="margin-bottom:2mm;"></div>
+          <strong data-i18n="d8.closure">Abschluss / Teamwürdigung:</strong><br>
+          <div id="pdf_d8_closure"></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    // Sprachdaten
+    const translations = {
+      de: {
+        title: "VDA 8D-Report Tool – Juracom",
+        subtitle: "Erfassen, prüfen und exportieren von 8D-Reports (Kunde / Lieferant, VDA-konform, D4/D5 separiert).",
+        lang: { label: "Sprache / Language / 语言:" },
+        buttons: {
+          validate: "Report prüfen",
+          pdf: "Als PDF exportieren",
+          excel: "Als Excel exportieren"
+        },
+        examples: {
+          label: "Beispielfall wählen:"
+        },
+        head: {
+          stammdaten: "Stammdaten / Kopf",
+          role: "Rolle:",
+          reportId: "8D-Nummer / Reklamationsnummer:",
+          customer: "Kunde:",
+          supplier: "Lieferant:",
+          date: "Datum:",
+          partNumber: "Teil / Artikel / Zeichnungsnummer:"
+        },
+        role: {
+          customer: "Kunde",
+          supplier: "Lieferant",
+          internal: "Intern"
+        },
+        d1: { title: "D1 – Team", desc: "Teammitglieder / Funktionen:" },
+        d2: { title: "D2 – Problembeschreibung", desc: "Problembeschreibung (Was, Wo, Wann, Wie viele, etc.):" },
+        d3: { title: "D3 – Sofortmaßnahmen (Containment)", desc: "Getroffene Sofortmaßnahmen:" },
+        d4: {
+          title: "D4 – Ursachenanalyse (Occurrence / Detection separiert)",
+          tua_label: "Technische Ursachen – Auftreten (TUA):",
+          tun_label: "Technische Ursachen – Nicht-Entdecken (TUN):",
+          sua_label: "Systemische Ursachen – Auftreten (SUA):",
+          sun_label: "Systemische Ursachen – Nicht-Entdecken (SUN):",
+          tua: "TUA", tun: "TUN", sua: "SUA", sun: "SUN",
+          fishbone_btn: "Fishbone (Ishikawa) öffnen",
+          why_btn: "5 Why öffnen",
+          fishbone_title: "Fishbone / Ishikawa (Text-Form)",
+          fishbone_hint: "Nutzen Sie die 6M (Mensch, Maschine, Material, Methode, Milieu, Messung), um mögliche Ursachen zu sammeln.",
+          fb_man: "Mensch (Man):",
+          fb_machine: "Maschine (Machine):",
+          fb_material: "Material:",
+          fb_method: "Methode (Method):",
+          fb_env: "Umgebung (Milieu/Environment):",
+          fb_measure: "Messung (Measurement):",
+          why_title: "5 Why Analyse",
+          why_hint: "Beginnen Sie mit dem Symptom und fragen Sie fünfmal „Warum?“. ",
+          why1: "Warum 1:",
+          why2: "Warum 2:",
+          why3: "Warum 3:",
+          why4: "Warum 4:",
+          why5: "Warum 5 (Root Cause):"
+        },
+        d5: {
+          title: "D5 – Dauerhafte Abstellmaßnahmen",
+          occ_label: "Occurrence (Auftreten verhindern):",
+          det_label: "Detection (Erkennung verbessern):",
+          occ: "Occurrence (Auftreten verhindern)",
+          det: "Detection (Entdeckung verbessern)"
+        },
+        d6: {
+          title: "D6 – Umsetzung der Maßnahmen",
+          desc: "Umzusetzende Maßnahmen inkl. Verantwortlicher und Termin:",
+          add_btn: "+ Maßnahme hinzufügen",
+          col_action: "Maßnahme",
+          col_responsible: "Verantwortlicher",
+          col_date: "Termin",
+          col_status: "Status"
+        },
+        d7: {
+          title: "D7 – Vorbeugende Maßnahmen / Lessons Learned",
+          desc: "Übertrag auf ähnliche Produkte / Prozesse, Standards, FMEAs:"
+        },
+        d8: {
+          title: "D8 – Erfolgskontrolle und Abschluss",
+          verif: "Nachweis der Wirksamkeit (Daten, Messwerte, Reklamationsrückgang, etc.):",
+          closure: "Teamwürdigung / Abschluss:"
+        },
+        pdf: {
+          subtitle: "nach VDA-Standard",
+          reportId: "8D-Nr.:",
+          date: "Datum:",
+          customer: "Kunde:",
+          supplier: "Lieferant:",
+          partNumber: "Teil / Zeichnungsnr.:",
+          d4_title: "D4 – Ursachenanalyse (TUA / TUN / SUA / SUN)"
+        },
+        watermark: { text: "DEMO - Nicht bezahlt" },
+        validation: {
+          missing: "Fehlende / kritische Felder: ",
+          ok: "Report ist formal vollständig (Basisprüfung und Plausibilitätscheck bestanden)."
+        }
+      },
+      en: {
+        title: "VDA 8D Report Tool – Juracom",
+        subtitle: "Create, review and export 8D reports (customer / supplier, VDA compliant, D4/D5 separated).",
+        lang: { label: "Language / Sprache / 语言:" },
+        buttons: {
+          validate: "Validate report",
+          pdf: "Export as PDF",
+          excel: "Export as Excel"
+        },
+        examples: {
+          label: "Select example case:"
+        },
+        head: {
+          stammdaten: "Master data / Header",
+          role: "Role:",
+          reportId: "8D number / Complaint number:",
+          customer: "Customer:",
+          supplier: "Supplier:",
+          date: "Date:",
+          partNumber: "Part / Article / Drawing number:"
+        },
+        role: {
+          customer: "Customer",
+          supplier: "Supplier",
+          internal: "Internal"
+        },
+        d1: { title: "D1 – Team", desc: "Team members / functions:" },
+        d2: { title: "D2 – Problem description", desc: "Problem description (What, where, when, how many, etc.):" },
+        d3: { title: "D3 – Containment actions", desc: "Implemented containment actions:" },
+        d4: {
+          title: "D4 – Root cause analysis (Occurrence / Detection separated)",
+          tua_label: "Technical causes – Occurrence (TUA):",
+          tun_label: "Technical causes – Non-Detection (TUN):",
+          sua_label: "Systemic causes – Occurrence (SUA):",
+          sun_label: "Systemic causes – Non-Detection (SUN):",
+          tua: "TUA", tun: "TUN", sua: "SUA", sun: "SUN",
+          fishbone_btn: "Open Fishbone (Ishikawa)",
+          why_btn: "Open 5 Why",
+          fishbone_title: "Fishbone / Ishikawa (text form)",
+          fishbone_hint: "Use the 6M (Man, Machine, Material, Method, Milieu, Measurement) to collect possible causes.",
+          fb_man: "Man:",
+          fb_machine: "Machine:",
+          fb_material: "Material:",
+          fb_method: "Method:",
+          fb_env: "Environment:",
+          fb_measure: "Measurement:",
+          why_title: "5 Why analysis",
+          why_hint: "Start from the symptom and ask \"Why?\" five times.",
+          why1: "Why 1:",
+          why2: "Why 2:",
+          why3: "Why 3:",
+          why4: "Why 4:",
+          why5: "Why 5 (root cause):"
+        },
+        d5: {
+          title: "D5 – Permanent corrective actions",
+          occ_label: "Occurrence (prevent occurrence):",
+          det_label: "Detection (improve detection):",
+          occ: "Occurrence (prevent occurrence)",
+          det: "Detection (improve detection)"
+        },
+        d6: {
+          title: "D6 – Implementation of actions",
+          desc: "Actions including responsible and due date:",
+          add_btn: "+ Add action",
+          col_action: "Action",
+          col_responsible: "Responsible",
+          col_date: "Due date",
+          col_status: "Status"
+        },
+        d7: {
+          title: "D7 – Preventive actions / Lessons learned",
+          desc: "Transfer to similar products / processes, standards, FMEAs:"
+        },
+        d8: {
+          title: "D8 – Verification / closure",
+          verif: "Verification of effectiveness (data, measurements, complaint reduction, etc.):",
+          closure: "Team recognition / closure:"
+        },
+        pdf: {
+          subtitle: "according to VDA standard",
+          reportId: "8D No.:",
+          date: "Date:",
+          customer: "Customer:",
+          supplier: "Supplier:",
+          partNumber: "Part / Drawing No.:",
+          d4_title: "D4 – Root cause analysis (TUA / TUN / SUA / SUN)"
+        },
+        watermark: { text: "DEMO - Not paid" },
+        validation: {
+          missing: "Missing / critical fields: ",
+          ok: "Report is formally complete (basic and plausibility checks passed)."
+        }
+      },
+      zh: {
+        title: "VDA 8D 报告工具 – Juracom",
+        subtitle: "创建、审核并导出 8D 报告（客户 / 供应商，符合 VDA 标准，D4/D5 原因分离）。",
+        lang: { label: "语言 / Language / Sprache:" },
+        buttons: {
+          validate: "检查报告",
+          pdf: "导出为 PDF",
+          excel: "导出为 Excel"
+        },
+        examples: {
+          label: "选择示例案例："
+        },
+        head: {
+          stammdaten: "主数据 / 头部信息",
+          role: "角色：",
+          reportId: "8D 编号 / 投诉编号：",
+          customer: "客户：",
+          supplier: "供应商：",
+          date: "日期：",
+          partNumber: "零件 / 物料 / 图号："
+        },
+        role: {
+          customer: "客户",
+          supplier: "供应商",
+          internal: "内部"
+        },
+        d1: { title: "D1 – 团队", desc: "团队成员 / 职能：" },
+        d2: { title: "D2 – 问题描述", desc: "问题描述（是什么、在哪里、何时、数量等）：" },
+        d3: { title: "D3 – 暂时措施（围堵）", desc: "已采取的暂时措施：" },
+        d4: {
+          title: "D4 – 根本原因分析（发生 / 检测分离）",
+          tua_label: "技术原因 – 发生 (TUA)：",
+          tun_label: "技术原因 – 未检出 (TUN)：",
+          sua_label: "系统原因 – 发生 (SUA)：",
+          sun_label: "系统原因 – 未检出 (SUN)：",
+          tua: "TUA", tun: "TUN", sua: "SUA", sun: "SUN",
+          fishbone_btn: "打开鱼骨图（石川）",
+          why_btn: "打开 5 Why",
+          fishbone_title: "鱼骨图 / 石川图（文本形式）",
+          fishbone_hint: "使用 6M（人、机器、材料、方法、环境、测量）收集可能原因。",
+          fb_man: "人（Man）：",
+          fb_machine: "机器（Machine）：",
+          fb_material: "材料（Material）：",
+          fb_method: "方法（Method）：",
+          fb_env: "环境（Environment）：",
+          fb_measure: "测量（Measurement）：",
+          why_title: "5 Why 分析",
+          why_hint: "从症状开始，连续问五次“为什么？”。",
+          why1: "为什么 1：",
+          why2: "为什么 2：",
+          why3: "为什么 3：",
+          why4: "为什么 4：",
+          why5: "为什么 5（根本原因）："
+        },
+        d5: {
+          title: "D5 – 永久纠正措施",
+          occ_label: "Occurrence（防止再次发生）：",
+          det_label: "Detection（提高检出能力）：",
+          occ: "Occurrence（防止再次发生）",
+          det: "Detection（提高检出能力）"
+        },
+        d6: {
+          title: "D6 – 措施实施",
+          desc: "实施措施（责任人和完成期限）：",
+          add_btn: "+ 添加措施",
+          col_action: "措施",
+          col_responsible: "责任人",
+          col_date: "完成期限",
+          col_status: "状态"
+        },
+        d7: {
+          title: "D7 – 预防措施 / 经验教训",
+          desc: "推广到类似产品 / 过程、标准、FMEA："
+        },
+        d8: {
+          title: "D8 – 有效性确认 / 结案",
+          verif: "有效性确认（数据、测量、投诉下降等）：",
+          closure: "团队表彰 / 结案说明："
+        },
+        pdf: {
+          subtitle: "符合 VDA 标准",
+          reportId: "8D 编号：",
+          date: "日期：",
+          customer: "客户：",
+          supplier: "供应商：",
+          partNumber: "零件 / 图号：",
+          d4_title: "D4 – 根本原因分析（TUA / TUN / SUA / SUN）"
+        },
+        watermark: { text: "演示版 - 未付费" },
+        validation: {
+          missing: "缺少 / 关键字段：",
+          ok: "报告格式完整（基础和逻辑检查通过）。"
+        }
+      }
+    };
+
+    let currentLang = 'de';
+    let donated = false;
+
+    function setLanguage(lang) {
+      currentLang = lang;
+      const dict = translations[lang] || translations.de;
+
+      document.querySelectorAll("[data-i18n]").forEach(el => {
+        const key = el.getAttribute("data-i18n");
+        const parts = key.split(".");
+        let value = dict;
+        parts.forEach(p => { if (value) value = value[p]; });
+        if (typeof value === "string") {
+          el.textContent = value;
+        }
+      });
+    }
+
+    // D6 dynamische Tabelle
+    let d6RowCounter = 0;
+
+    function addD6Row() {
+      d6RowCounter++;
+      const tbody = document.getElementById('d6_tbody');
+      const row = document.createElement('tr');
+      row.id = 'd6_row_' + d6RowCounter;
+      row.innerHTML = `
+        <td style="border:1px solid #ccc; padding:4px;">
+          <textarea class="d6_action" rows="2" style="width:100%; box-sizing:border-box;"></textarea>
+        </td>
+        <td style="border:1px solid #ccc; padding:4px;">
+          <input type="text" class="d6_responsible" style="width:100%; box-sizing:border-box;" />
+        </td>
+        <td style="border:1px solid #ccc; padding:4px;">
+          <input type="date" class="d6_date" style="width:100%; box-sizing:border-box;" />
+        </td>
+        <td style="border:1px solid #ccc; padding:4px;">
+          <select class="d6_status" style="width:100%; box-sizing:border-box;">
+            <option value="offen">Offen</option>
+            <option value="in_arbeit">In Arbeit</option>
+            <option value="erledigt">Erledigt</option>
+          </select>
+        </td>
+        <td style="border:1px solid #ccc; padding:4px; text-align:center;">
+          <button type="button" onclick="deleteD6Row('${row.id}')" style="padding:2px 6px;">🗑️</button>
+        </td>
+      `;
+      tbody.appendChild(row);
+    }
+
+    function deleteD6Row(rowId) {
+      const row = document.getElementById(rowId);
+      if (row) row.remove();
+    }
+
+    function getD6Data() {
+      const rows = [];
+      document.querySelectorAll('#d6_tbody tr').forEach(row => {
+        const action = row.querySelector('.d6_action')?.value || '';
+        const responsible = row.querySelector('.d6_responsible')?.value || '';
+        const date = row.querySelector('.d6_date')?.value || '';
+        const status = row.querySelector('.d6_status')?.value || '';
+        if (action || responsible || date) {
+          rows.push({ action, responsible, date, status });
+        }
+      });
+      return rows;
+    }
+
+    // Beispiele
+    const examples = {
+      1: {
+        reportId: "EX-01",
+        customer: "OEM A",
+        supplier: "Juracom",
+        date: "2026-02-25",
+        partNumber: "12345-01",
+        d1_team: "",
+        d2_problem: "Teile sind schlecht.",
+        d3_containment: "",
+        d4_tua: "",
+        d4_tun: "",
+        d4_sua: "",
+        d4_sun: "",
+        d5_occurrence: "",
+        d5_detection: "",
+        d6_implementation: [],
+        d7_preventive: "",
+        d8_verification: "",
+        d8_closure: ""
+      },
+      2: {
+        reportId: "EX-02",
+        customer: "OEM B",
+        supplier: "Juracom",
+        date: "2026-02-25",
+        partNumber: "98765-02",
+        d1_team: "QS, Produktion",
+        d2_problem: "Hohe Ausschussrate an Linie 2, Poren im Druckguss.",
+        d3_containment: "Sortierung der aktuellen Charge.",
+        d4_tua: "Vermutlich falsche Temperatur, noch nicht bestätigt.",
+        d4_tun: "",
+        d4_sua: "",
+        d4_sun: "",
+        d5_occurrence: "Temperatur genauer beobachten.",
+        d5_detection: "",
+        d6_implementation: [],
+        d7_preventive: "",
+        d8_verification: "",
+        d8_closure: ""
+      },
+      3: {
+        reportId: "EX-03",
+        customer: "Tier1 C",
+        supplier: "Juracom",
+        date: "2026-02-25",
+        partNumber: "CAST-4711",
+        d1_team: "QS, Produktion, Werkzeugbau",
+        d2_problem: "Poren im Bereich Dichtfläche, 4% Ausschuss nach Endprüfung.",
+        d3_containment: "100%-Prüfung mit Druckprüfung, Sperrung Lagerbestand.",
+        d4_tua: "Metalltemperatur schwankt, Gießparameter nicht stabil.",
+        d4_tun: "Endprüfung prüft nur Stichproben bei Zwischenprüfung.",
+        d4_sua: "",
+        d4_sun: "",
+        d5_occurrence: "Gießparameter in SOP fixieren und überwachen.",
+        d5_detection: "Zwischenprüfung mit 100%-Prüfung für 3 Wochen einführen.",
+        d6_implementation: [],
+        d7_preventive: "",
+        d8_verification: "",
+        d8_closure: ""
+      },
+      4: {
+        reportId: "EX-04",
+        customer: "OEM D",
+        supplier: "Juracom",
+        date: "2026-02-25",
+        partNumber: "HOUSING-220",
+        d1_team: "QS, Produktion, Konstruktion, Einkauf",
+        d2_problem: "Rissbildung an Befestigungsbohrung nach Montage beim Kunden, 2,5% Feldreklamationen.",
+        d3_containment: "Sofortiger Stopp Auslieferung, 100%-Sichtprüfung.",
+        d4_tua: "Materialkerbwirkung durch scharfe Kante an Bohrung, unzureichende Entgratung.",
+        d4_tun: "Endprüfung fokussiert aktuell nur auf Maßhaltigkeit, nicht auf Oberflächenrisse.",
+        d4_sua: "",
+        d4_sun: "",
+        d5_occurrence: "Bohrungsgeometrie anpassen, Fase ergänzen, Entgratungspflicht in Arbeitsanweisung.",
+        d5_detection: "Endprüfung um Rissprüfung an dieser Bohrung ergänzen.",
+        d6_implementation: [
+          { action: "Zeichnung anpassen", responsible: "Konstruktion", date: "2026-03-10", status: "erledigt" },
+          { action: "Arbeitsanweisung aktualisieren", responsible: "Produktion", date: "2026-03-15", status: "in_arbeit" }
+        ],
+        d7_preventive: "Anpassung FMEA und Standardzeichnung für ähnliche Bauteile.",
+        d8_verification: "Nach 6 Monaten keine neuen Reklamationen, interne PPM deutlich gesunken.",
+        d8_closure: "Team wird im Monatsmeeting gewürdigt."
+      },
+      5: {
+        reportId: "EX-05",
+        customer: "OEM E",
+        supplier: "Juracom",
+        date: "2026-02-25",
+        partNumber: "VALVE-BODY-900",
+        d1_team: "QS, Produktion, Instandhaltung, Konstruktion, Lieferantenmanagement",
+        d2_problem: "Leckage an Ventilgehäuse im Feld, 1,8% Rückläufer, Risiko für Endkunde (Funktionsausfall).",
+        d3_containment: "Sperrung betroffener Chargen, 100%-Druckprüfung, Information an Kunde mit Risikobewertung.",
+        d4_tua: "O-Ring-Nut nicht prozesssicher hergestellt, Werkzeugverschleiß wurde nicht rechtzeitig erkannt.",
+        d4_tun: "Prüfkonzept bewertet nur Maß X, keine Funktionsprüfung unter Betriebsdruck.",
+        d4_sua: "Wartungsintervall für Werkzeug nicht definiert, keine klare Verantwortlichkeit.",
+        d4_sun: "Kein standardisiertes Review von Prüfplänen bei Feldreklamationen.",
+        d5_occurrence: "Werkzeugwartungsplan mit Grenzmustern einführen, SPC auf kritische Maße.",
+        d5_detection: "Druckprüfung unter Betriebsdruck in Endprüfung integrieren, Prüfplan anpassen.",
+        d6_implementation: [
+          { action: "Wartungsplan erstellen", responsible: "Instandhaltung", date: "2026-03-05", status: "erledigt" },
+          { action: "Prüfplan ändern", responsible: "QS", date: "2026-03-12", status: "erledigt" },
+          { action: "Schulung Produktion", responsible: "Produktion", date: "2026-03-20", status: "in_arbeit" }
+        ],
+        d7_preventive: "FMEA aktualisiert, Lessons Learned in Standard für Ventilgehäuse aufgenommen, Reviewprozess für Prüfpläne definiert.",
+        d8_verification: "12 Monate ohne Reklamation, PPM intern und extern signifikant reduziert, Audit bestätigt Wirksamkeit.",
+        d8_closure: "Team und Lieferantenpartner erhalten Anerkennung."
+      }
+    };
+
+    function loadExample(n) {
+      const ex = examples[n];
+      if (!ex) return;
+      const form = document.getElementById('form8D');
+
+      form.reportId.value = ex.reportId || "";
+      form.customer.value = ex.customer || "";
+      form.supplier.value = ex.supplier || "";
+      form.date.value = ex.date || "";
+      form.partNumber.value = ex.partNumber || "";
+      form.d1_team.value = ex.d1_team || "";
+      form.d2_problem.value = ex.d2_problem || "";
+      form.d3_containment.value = ex.d3_containment || "";
+      form.d4_tua.value = ex.d4_tua || "";
+      form.d4_tun.value = ex.d4_tun || "";
+      form.d4_sua.value = ex.d4_sua || "";
+      form.d4_sun.value = ex.d4_sun || "";
+      form.d5_occurrence.value = ex.d5_occurrence || "";
+      form.d5_detection.value = ex.d5_detection || "";
+      form.d7_preventive.value = ex.d7_preventive || "";
+      form.d8_verification.value = ex.d8_verification || "";
+      form.d8_closure.value = ex.d8_closure || "";
+
+      // D6 Tabelle füllen
+      document.getElementById('d6_tbody').innerHTML = '';
+      d6RowCounter = 0;
+      if (ex.d6_implementation && Array.isArray(ex.d6_implementation)) {
+        ex.d6_implementation.forEach(item => {
+          addD6Row();
+          const lastRow = document.querySelector('#d6_tbody tr:last-child');
+          if (lastRow) {
+            lastRow.querySelector('.d6_action').value = item.action || '';
+            lastRow.querySelector('.d6_responsible').value = item.responsible || '';
+            lastRow.querySelector('.d6_date').value = item.date || '';
+            lastRow.querySelector('.d6_status').value = item.status || 'offen';
+          }
+        });
+      }
+      validateReport();
+    }
+
+    // Show/Hide D4-Tools
+    function toggleFishbone() {
+      const sec = document.getElementById('fishboneSection');
+      sec.style.display = (sec.style.display === 'none' || sec.style.display === '') ? 'block' : 'none';
+    }
+
+    function toggleFiveWhy() {
+      const sec = document.getElementById('fiveWhySection');
+      sec.style.display = (sec.style.display === 'none' || sec.style.display === '') ? 'block' : 'none';
+    }
+
+    function getFormData() {
+      const form = document.getElementById('form8D');
+      return {
+        role: form.role.value,
+        reportId: form.reportId.value,
+        customer: form.customer.value,
+        supplier: form.supplier.value,
+        date: form.date.value,
+        partNumber: form.partNumber.value,
+        d1_team: form.d1_team.value,
+        d2_problem: form.d2_problem.value,
+        d3_containment: form.d3_containment.value,
+        d4_tua: form.d4_tua.value,
+        d4_tun: form.d4_tun.value,
+        d4_sua: form.d4_sua.value,
+        d4_sun: form.d4_sun.value,
+        d5_occurrence: form.d5_occurrence.value,
+        d5_detection: form.d5_detection.value,
+        d6_implementation: getD6Data(),
+        d7_preventive: form.d7_preventive.value,
+        d8_verification: form.d8_verification.value,
+        d8_closure: form.d8_closure.value
+      };
+    }
+
+    function validateReport() {
+      const data = getFormData();
+      const dict = translations[currentLang];
+      const missing = [];
+      const plausibility = [];
+
+      if (!data.reportId) missing.push(dict.head.reportId);
+      if (!data.customer && !data.supplier) missing.push(dict.head.customer + " / " + dict.head.supplier);
+      if (!data.date) missing.push(dict.head.date);
+      if (!data.partNumber) missing.push(dict.head.partNumber);
+      if (!data.d2_problem) missing.push("D2");
+      if (!data.d3_containment) missing.push("D3");
+      if (!data.d4_tua && !data.d4_tun && !data.d4_sua && !data.d4_sun)
+        missing.push("D4 (TUA/TUN/SUA/SUN)");
+      if (!data.d5_occurrence && !data.d5_detection)
+        missing.push("D5 (Occurrence/Detection)");
+      if (!data.d8_verification)
+        missing.push("D8");
+
+      // D4→D5
+      if ((data.d4_tua || data.d4_tun || data.d4_sua || data.d4_sun) &&
+          !data.d5_occurrence && !data.d5_detection) {
+        if (currentLang === 'de') {
+          plausibility.push("Für die in D4 beschriebenen Ursachen müssen passende Maßnahmen in D5 definiert werden (Occurrence/Detection).");
+        } else if (currentLang === 'en') {
+          plausibility.push("For the root causes described in D4, appropriate corrective actions must be defined in D5 (Occurrence/Detection).");
+        } else {
+          plausibility.push("对于 D4 中描述的根本原因，必须在 D5 中制定相应的纠正措施（发生 / 检测）。");
+        }
+      }
+
+      // D5→D6
+      if ((data.d5_occurrence || data.d5_detection) && (!data.d6_implementation || data.d6_implementation.length === 0)) {
+        if (currentLang === 'de') {
+          plausibility.push("D6 muss die Umsetzung der in D5 definierten Maßnahmen beschreiben (Wer, Was, Bis Wann, Status).");
+        } else if (currentLang === 'en') {
+          plausibility.push("D6 must describe the implementation of the corrective actions defined in D5 (Who, What, Due date, Status).");
+        } else {
+          plausibility.push("D6 必须描述在 D5 中定义的纠正措施的实施情况（责任人、内容、完成期限、状态）。");
+        }
+      }
+
+      // systemische Ursachen → D7
+      if ((data.d4_sua || data.d4_sun) && !data.d7_preventive) {
+        if (currentLang === 'de') {
+          plausibility.push("Für systemische Ursachen (SUA/SUN) in D4 sollten in D7 vorbeugende Maßnahmen (Standards, FMEA, Schulung, Prüfplan) definiert werden.");
+        } else if (currentLang === 'en') {
+          plausibility.push("For systemic causes (SUA/SUN) in D4, preventive actions should be defined in D7 (standards, FMEA, training, control plan).");
+        } else {
+          plausibility.push("对于 D4 中的系统原因（SUA/SUN），应在 D7 中制定预防措施（标准、FMEA、培训、控制计划等）。");
+        }
+      }
+
+      // Maßnahmen ohne Ursachen
+      if (!data.d4_tua && !data.d4_tun && !data.d4_sua && !data.d4_sun &&
+          (data.d5_occurrence || data.d5_detection)) {
+        if (currentLang === 'de') {
+          plausibility.push("Es sind Maßnahmen in D5 definiert, ohne dass in D4 Ursachen beschrieben sind. Bitte D4 zuerst vollständig ausarbeiten.");
+        } else if (currentLang === 'en') {
+          plausibility.push("Corrective actions are defined in D5, but no root causes are described in D4. Please complete D4 first.");
+        } else {
+          plausibility.push("在 D5 中已经定义了措施，但 D4 中没有描述根本原因。请先完整填写 D4。");
+        }
+      }
+
+      const result = document.getElementById('validationResult');
+      if (missing.length > 0) {
+        result.className = "error";
+        let text = dict.validation.missing + missing.join(", ");
+        if (plausibility.length > 0) text += " | " + plausibility.join(" ");
+        result.textContent = text;
+      } else if (plausibility.length > 0) {
+        result.className = "error";
+        result.textContent = plausibility.join(" ");
+      } else {
+        result.className = "ok";
+        result.textContent = dict.validation.ok;
+      }
+    }
+
+    function buildPdfView() {
+      const data = getFormData();
+
+      document.getElementById('pdf_reportId').textContent = data.reportId || '';
+      document.getElementById('pdf_date').textContent = data.date || '';
+      document.getElementById('pdf_customer').textContent = data.customer || '';
+      document.getElementById('pdf_supplier').textContent = data.supplier || '';
+      document.getElementById('pdf_partNumber').textContent = data.partNumber || '';
+
+      document.getElementById('pdf_d1').textContent = data.d1_team || '';
+      document.getElementById('pdf_d2').textContent = data.d2_problem || '';
+      document.getElementById('pdf_d3').textContent = data.d3_containment || '';
+
+      document.getElementById('pdf_d4_tua').textContent = data.d4_tua || '';
+      document.getElementById('pdf_d4_tun').textContent = data.d4_tun || '';
+      document.getElementById('pdf_d4_sua').textContent = data.d4_sua || '';
+      document.getElementById('pdf_d4_sun').textContent = data.d4_sun || '';
+
+      document.getElementById('pdf_d5_occurrence').textContent = data.d5_occurrence || '';
+      document.getElementById('pdf_d5_detection').textContent = data.d5_detection || '';
+
+      // D6 Tabelle im PDF
+      const d6Data = data.d6_implementation || [];
+      let d6Html = '';
+      if (d6Data.length > 0) {
+        d6Html = '<table style="width:100%; border-collapse:collapse; font-size:7px; margin-top:2mm;">';
+        d6Html += '<tr style="background:#eee;"><th style="border:1px solid #000; padding:1mm;">Maßnahme</th><th style="border:1px solid #000; padding:1mm;">Verantwortlicher</th><th style="border:1px solid #000; padding:1mm;">Termin</th><th style="border:1px solid #000; padding:1mm;">Status</th></tr>';
+        d6Data.forEach(row => {
+          d6Html += `<tr>
+            <td style="border:1px solid #000; padding:1mm;">${row.action}</td>
+            <td style="border:1px solid #000; padding:1mm;">${row.responsible}</td>
+            <td style="border:1px solid #000; padding:1mm;">${row.date}</td>
+            <td style="border:1px solid #000; padding:1mm;">${row.status}</td>
+          </tr>`;
+        });
+        d6Html += '</table>';
+      }
+      document.getElementById('pdf_d6').innerHTML = d6Html;
+
+      document.getElementById('pdf_d7').textContent = data.d7_preventive || '';
+      document.getElementById('pdf_d8_verification').textContent = data.d8_verification || '';
+      document.getElementById('pdf_d8_closure').textContent = data.d8_closure || '';
+
+      const watermarkEl = document.getElementById('watermark');
+      watermarkEl.textContent = translations[currentLang].watermark.text;
+      watermarkEl.style.display = donated ? 'none' : 'block';
+    }
+
+    function exportPDF() {
+      buildPdfView();
+      const layout = document.getElementById('pdfLayout');
+      layout.style.display = 'block';
+
+      const opt = {
+        margin: 0,
+        filename: (document.getElementById('reportId').value || '8D-Report') + '.pdf',
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      };
+
+      html2pdf().from(document.getElementById('pdfPage')).set(opt).save().then(() => {
+        layout.style.display = 'none';
+      });
+    }
+
+    function exportExcel() {
+      const data = getFormData();
+      const dict = translations[currentLang];
+      const rows = [
+        { Feld: dict.head.reportId, Wert: data.reportId },
+        { Feld: dict.head.customer, Wert: data.customer },
+        { Feld: dict.head.supplier, Wert: data.supplier },
+        { Feld: dict.head.date, Wert: data.date },
+        { Feld: dict.head.partNumber, Wert: data.partNumber },
+        { Feld: dict.d1.title, Wert: data.d1_team },
+        { Feld: dict.d2.title, Wert: data.d2_problem },
+        { Feld: dict.d3.title, Wert: data.d3_containment },
+        { Feld: dict.d4.tua, Wert: data.d4_tua },
+        { Feld: dict.d4.tun, Wert: data.d4_tun },
+        { Feld: dict.d4.sua, Wert: data.d4_sua },
+        { Feld: dict.d4.sun, Wert: data.d4_sun },
+        { Feld: dict.d5.occ, Wert: data.d5_occurrence },
+        { Feld: dict.d5.det, Wert: data.d5_detection },
+        { Feld: dict.d7.title, Wert: data.d7_preventive },
+        { Feld: dict.d8.verif, Wert: data.d8_verification },
+        { Feld: dict.d8.closure, Wert: data.d8_closure }
+      ];
+
+      const d6Data = data.d6_implementation || [];
+      d6Data.forEach((item, idx) => {
+        rows.push({
+          Feld: `D6 Maßnahme ${idx + 1}`,
+          Wert: `${item.action} | ${item.responsible} | ${item.date} | ${item.status}`
+        });
+      });
+
+      const worksheet = XLSX.utils.json_to_sheet(rows);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, '8D-Report');
+      const filename = (data.reportId || '8D-Report') + '.xlsx';
+      XLSX.writeFile(workbook, filename);
+    }
+
+    function unlockFullVersion() {
+      const code = prompt("Spenden-Code eingeben (Beispiel: DONATE2024):");
+      if (code === "DONATE2024") {
+        donated = true;
+        alert("Vielen Dank für Ihre Spende! Wasserzeichen entfernt.");
+      } else {
+        alert("Ungültiger Code.");
+      }
+    }
+
+    document.addEventListener("DOMContentLoaded", function () {
+      setLanguage("de");
+    });
+  </script>
+</body>
+</html>
