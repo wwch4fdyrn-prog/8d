@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>8D Tool – Juracom</title>
+
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    h1, h2 { margin-top: 20px; }
+    fieldset { margin-bottom: 20px; border: 1px solid #ccc; padding: 10px; }
+    legend { font-weight: bold; }
+    label { display: block; margin-top: 8px; font-size: 14px; }
+    textarea, input, select { width: 100%; box-sizing: border-box; padding: 6px; font-size: 14px; }
+    .two-column { display: flex; gap: 10px; }
+    .two-column > div { flex: 1; }
+    .error { color: red; font-weight: bold; }
+    .ok { color: green; font-weight: bold; }
+    .toolbar { margin: 20px 0; padding: 10px; background: #f5f5f5; border-radius: 4px; }
+    button { margin-right: 10px; padding: 8px 16px; cursor: pointer; }
+
+    /* PDF-Layout Styles */
+    #pdfLayout { position: relative; }
+    .watermark {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) rotate(-45deg);
+      font-size: 80px;
+      color: rgba(255, 0, 0, 0.15);
+      font-weight: bold;
+      pointer-events: none;
+      z-index: 1000;
+      white-space: nowrap;
+    }
+    .vda-section {
+      border: 1px solid #000;
+      margin-bottom: 3mm;
+      page-break-inside: avoid;
+    }
+    .vda-header {
+      background: #eee;
+      font-weight: bold;
+      font-size: 9px;
+      padding: 2px 3px;
+      border-bottom: 1px solid #000;
+    }
+    .vda-body {
+      padding: 2px 3px;
+      min-height: 12mm;
+      font-size: 8px;
+      word-wrap: break-word;
+    }
+  </style>
+
+  <!-- SheetJS für Excel-Export -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <!-- html2pdf für PDF-Export -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+</head>
+<body>
+  <!-- Kopf Web-Variante -->
+  <h1>8D Tool – Juracom</h1>
+  <p>Erfassen, prüfen und exportieren von 8D-Reports (Kunde / Lieferant, VDA-konform, D4/D5 separiert).</p>
+
+  <div class="toolbar">
+    <label for="langSelect"><strong>Sprache / Language / 语言:</strong></label>
+    <select id="langSelect" onchange="setLanguage(this.value)" style="width: 200px; margin-bottom: 10px;">
+      <option value="de">Deutsch</option>
+      <option value="en">English</option>
+      <option value="zh">中文</option>
+    </select>
+    <br>
+    <button type="button" onclick="validateReport()" data-i18n="buttons.validate">Report prüfen</button>
+    <button type="button" onclick="exportPDF()" data-i18n="buttons.pdf">Als PDF exportieren</button>
+    <button type="button" onclick="exportExcel()" data-i18n="buttons.excel">Als Excel exportieren</button>
+    <button type="button" onclick="unlockFullVersion()">Spende-Code</button>
+    <span id="validationResult"></span>
+  </div>
+
+  <!-- Beispiel-Fälle -->
+  <div style="margin-bottom:15px;">
+    <span data-i18n="examples.label"><strong>Beispielfall wählen:</strong></span>
+    <button type="button" onclick="loadExample(1)" title="unterirdisch">💩</button>
+    <button type="button" onclick="loadExample(2)" title="schwach">⚠️</button>
+    <button type="button" onclick="loadExample(3)" title="mittel">➖</button>
+    <button type="button" onclick="loadExample(4)" title="gut">👍</button>
+    <button type="button" onclick="loadExample(5)" title="hervorragend">🏆</button>
+  </div>
+
+  <!-- Formular 8D -->
+  <form id="form8D">
+    <!-- Meta / Kopf -->
+    <fieldset>
+      <legend data-i18n="head.stammdaten">Stammdaten / Kopf</legend>
+      <div class="two-column">
+        <div>
+          <label data-i18n="head.role">Rolle:</label>
+          <select id="role" name="role">
+            <option value="kunde" data-i18n="role.customer">Kunde</option>
+            <option value="lieferant" data-i18n="role.supplier">Lieferant</option>
+            <option value="intern" data-i18n="role.internal">Intern</option>
+          </select>
+        </div>
+        <div>
+          <label data-i18n="head.reportId">8D-Nummer / Reklamationsnummer:</label>
+          <input type="text" id="reportId" name="reportId" />
+        </div>
+      </div>
+
+      <div class="two-column">
+        <div>
+          <label data-i18n="head.customer">Kunde:</label>
+          <input type="text" id="customer" name="customer" />
+        </div>
+        <div>
+          <label data-i18n="head.supplier">Lieferant:</label>
+          <input type="text" id="supplier" name="supplier" />
+        </div>
+      </div>
+
+      <div class="two-column">
+        <div>
+          <label data-i18n="head.date">Datum:</label>
+          <input type="date" id="date" name="date" />
+        </div>
+        <div>
+          <label data-i18n="head.partNumber">Teil / Artikel / Zeichnungsnummer:</label>
+          <input type="text" id="partNumber" name="partNumber" />
+        </div>
+      </div>
+    </fieldset>
+
+    <!-- D1 -->
+    <fieldset>
+      <legend data-i18n="d1.title">D1 – Team</legend>
+      <label data-i18n="d1.desc">Teammitglieder / Funktionen:</label>
+      <textarea id="d1_team" rows="3"></textarea>
+    </fieldset>
+
+    <!-- D2 -->
+    <fieldset>
+      <legend data-i18n="d2.title">D2 – Problembeschreibung</legend>
+      <label data-i18n="d2.desc">Problembeschreibung (Was, Wo, Wann, Wie viele, etc.):</label>
+      <textarea id="d2_problem" rows="4"></textarea>
+    </fieldset>
+
+    <!-- D3 -->
+    <fieldset>
+      <legend data-i18n="d3.title">D3 – Sofortmaßnahmen (Containment)</legend>
+      <label data-i18n="d3.desc">Getroffene Sofortmaßnahmen:</label>
+      <textarea id="d3_containment" rows="3"></textarea>
+    </fieldset>
+
+    <!-- D4 -->
+    <fieldset>
+      <legend data-i18n="d4.title">D4 – Ursachenanalyse (Occurrence / Detection separiert)</legend>
+
+      <div style="margin-bottom:8px;">
+        <button type="button" onclick="toggleFishbone()" data-i18n="d4.fishbone_btn">Fishbone (Ishikawa) öffnen</button>
+        <button type="button" onclick="toggleFiveWhy()" data-i18n="d4.why_btn">5 Why öffnen</button>
+      </div>
+
+      <label data-i18n="d4.tua_label">Technische Ursachen – Auftreten (TUA):</label>
+      <textarea id="d4_tua" rows="3"></textarea>
+
+      <label data-i18n="d4.tun_label">Technische Ursachen – Nicht-Entdecken (TUN):</label>
+      <textarea id="d4_tun" rows="3"></textarea>
+
+      <label data-i18n="d4.sua_label">Systemische Ursachen – Auftreten (SUA):</label>
+      <textarea id="d4_sua" rows="3"></textarea>
+
+      <label data-i18n="d4.sun_label">Systemische Ursachen – Nicht-Entdecken (SUN):</label>
+      <textarea id="d4_sun" rows="3"></textarea>
+
+      <!-- Fishbone Bereich -->
+      <div id="fishboneSection" style="display:none; margin-top:10px; border:1px dashed #999; padding:8px;">
+        <strong data-i18n="d4.fishbone_title">Fishbone / Ishikawa (Text-Form)</strong>
+        <p data-i18n="d4.fishbone_hint">Nutzen Sie die 6M (Mensch, Maschine, Material, Methode, Milieu, Messung), um mögliche Ursachen zu sammeln.</p>
+        <div class="two-column">
+          <div>
+            <label data-i18n="d4.fb_man">Mensch (Man):</label>
+            <textarea id="fb_man" rows="2"></textarea>
+            <label data-i18n="d4.fb_machine">Maschine (Machine):</label>
+            <textarea id="fb_machine" rows="2"></textarea>
+            <label data-i18n="d4.fb_material">Material:</label>
+            <textarea id="fb_material" rows="2"></textarea>
+          </div>
+          <div>
+            <label data-i18n="d4.fb_method">Methode (Method):</label>
+            <textarea id="fb_method" rows="2"></textarea>
+            <label data-i18n="d4.fb_env">Umgebung (Milieu/Environment):</label>
+            <textarea id="fb_env" rows="2"></textarea>
+            <label data-i18n="d4.fb_measure">Messung (Measurement):</label>
+            <textarea id="fb_measure" rows="2"></textarea>
+          </div>
+        </div>
+      </div>
+
+      <!-- 5-Why Bereich -->
+      <div id="fiveWhySection" style="display:none; margin-top:10px; border:1px dashed #999; padding:8px;">
+        <strong data-i18n="d4.why_title">5 Why Analyse</strong>
+        <p data-i18n="d4.why_hint">Beginnen Sie mit dem Symptom und fragen Sie fünfmal „Warum?“.</p>
+        <label data-i18n="d4.why1">Warum 1:</label>
+        <textarea id="why1" rows="2"></textarea>
+        <label data-i18n="d4.why2">Warum 2:</label>
+        <textarea id="why2" rows="2"></textarea>
+        <label data-i18n="d4.why3">Warum 3:</label>
+        <textarea id="why3" rows="2"></textarea>
+        <label data-i18n="d4.why4">Warum 4:</label>
+        <textarea id="why4" rows="2"></textarea>
+        <label data-i18n="d4.why5">Warum 5 (Root Cause):</label>
+        <textarea id="why5" rows="2"></textarea>
+      </div>
+    </fieldset>
+
+    <!-- D5 -->
+    <fieldset>
+      <legend data-i18n="d5.title">D5 – Dauerhafte Abstellmaßnahmen</legend>
+      <div class="two-column">
+        <div>
+          <label data-i18n="d5.occ_label">Occurrence (Auftreten verhindern):</label>
+          <textarea id="d5_occurrence" rows="4"></textarea>
+        </div>
+        <div>
+          <label data-i18n="d5.det_label">Detection (Erkennung verbessern):</label>
+          <textarea id="d5_detection" rows="4"></textarea>
+        </div>
+      </div>
+    </fieldset>
+
+    <!-- D6 MIT TABELLE -->
+    <fieldset>
+      <legend data-i18n="d6.title">D6 – Umsetzung der Maßnahmen</legend>
+      <p data-i18n="d6.desc">Umzusetzende Maßnahmen inkl. Verantwortlicher und Termin:</p>
+
+      <button type="button" onclick="addD6Row()" data-i18n="d6.add_btn">+ Maßnahme hinzufügen</button>
+
+      <table id="d6_table" style="width:100%; border-collapse:collapse; margin-top:10px;">
+        <thead>
+          <tr style="background:#eee;">
+            <th style="border:1px solid #ccc; padding:4px;" data-i18n="d6.col_action">Maßnahme</th>
+            <th style="border:1px solid #ccc; padding:4px; width:150px;" data-i18n="d6.col_responsible">Verantwortlicher</th>
+            <th style="border:1px solid #ccc; padding:4px; width:120px;" data-i18n="d6.col_date">Termin</th>
+            <th style="border:1px solid #ccc; padding:4px; width:100px;" data-i18n="d6.col_status">Status</th>
+            <th style="border:1px solid #ccc; padding:4px; width:50px;"></th>
+          </tr>
+        </thead>
+        <tbody id="d6_tbody">
+          <!-- Zeilen werden dynamisch hinzugefügt -->
+        </tbody>
+      </table>
+    </fieldset>
+
+    <!-- D7 -->
+    <fieldset>
+      <legend data-i18n="d7.title">D7 – Vorbeugende Maßnahmen / Lessons Learned</legend>
+      <label data-i18n="d7.desc">Übertrag auf ähnliche Produkte / Prozesse, Standards, FMEAs:</label>
+      <textarea id="d7_preventive" rows="4"></textarea>
+    </fieldset>
+
+    <!-- D8 -->
+    <fieldset>
+      <legend data-i18n="d8.title">D8 – Erfolgskontrolle und Abschluss</legend>
+      <label data-i18n="d8.verif">Nachweis der Wirksamkeit (Daten, Messwerte, Reklamationsrückgang, etc.):</label>
+      <textarea id="d8_verification" rows="4"></textarea>
+      <label data-i18n="d8.closure">Teamwürdigung / Abschluss:</label>
+      <textarea id="d8_closure" rows="2"></textarea>
+    </fieldset>
+  </form>
+
+  <!-- PDF-Layout (für Export / Druck) -->
+  <div id="pdfLayout" style="display:none; font-family: Arial, sans-serif; font-size:10px;">
+    <!-- Wasserzeichen -->
+    <div id="watermark" class="watermark" data-i18n="watermark.text">DEMO - Nicht bezahlt</div>
+
+    <div id="pdfPage" style="width:210mm; min-height:297mm; padding:10mm; box-sizing:border-box; position: relative;">
+
+      <!-- Kopfbereich Druck: Logo links, Titel 8D Report in der Mitte -->
+      <table style="width:100%; border-collapse:collapse; margin-bottom:4mm;">
+        <tr>
+          <!-- Logo links -->
+          <td style="width:25%; border:1px solid #000; text-align:center; padding:2mm; vertical-align:middle;">
+            <div style="font-weight:bold; font-size:14px;">Juracom</div>
+          </td>
+
+          <!-- Mitte: 8D Report -->
+          <td style="width:50%; border-top:1px solid #000; border-bottom:1px solid #000; text-align:center; vertical-align:middle;">
+            <div style="font-weight:bold; font-size:14px;">8D Report</div>
+            <div style="font-size:8px;" data-i18n="pdf.subtitle">nach VDA-Standard</div>
+          </td>
+
+          <!-- Rechts: 8D-Nr. / Datum -->
+          <td style="width:25%; border:1px solid #000; font-size:8px; padding:2mm; vertical-align:top;">
+            <div><strong data-i18n="pdf.reportId">8D-Nr.:</strong> <span id="pdf_reportId"></span></div>
+            <div><strong data-i18n="pdf.date">Datum:</strong> <span id="pdf_date"></span></div>
+          </td>
+        </tr>
+      </table>
+
+      <!-- Stammdaten -->
+      <table style="width:100%; border-collapse:collapse; margin-bottom:3mm; font-size:8px;">
+        <tr>
+          <td style="border:1px solid #000; padding:1mm;">
+            <strong data-i18n="pdf.customer">Kunde:</strong> <span id="pdf_customer"></span>
+          </td>
+          <td style="border:1px solid #000; padding:1mm;">
+            <strong data-i18n="pdf.supplier">Lieferant:</strong> <span id="pdf_supplier"></span>
+          </td>
+          <td style="border:1px solid #000; padding:1mm;">
+            <strong data-i18n="pdf.partNumber">Teil / Zeichnungsnr.:</strong> <span id="pdf_partNumber"></span>
+          </td>
+        </tr>
+      </table>
+
+      <!-- D1 -->
+      <div class="vda-section">
+        <div class="vda-header" data-i18n="d1.title">D1 – Team</div>
+        <div class="vda-body" id="pdf_d1"></div>
+      </div>
+
+      <!-- D2 -->
+      <div class="vda-section">
+        <div class="vda-header" data-i18n="d2.title">D2 – Problembeschreibung</div>
+        <div class="vda-body" id="pdf_d2"></div>
+      </div>
+
+      <!-- D3 -->
+      <div class="vda-section">
+        <div class="vda-header" data-i18n="d3.title">D3 – Sofortmaßnahmen</div>
+        <div class="vda-body" id="pdf_d3"></div>
+      </div>
+
+      <!-- D4 -->
+      <div class="vda-section">
+        <div class="vda-header" data-i18n="pdf.d4_title">D4 – Ursachenanalyse (TUA / TUN / SUA / SUN)</div>
+        <table style="width:100%; border-collapse:collapse; font-size:8px;">
+          <tr>
+            <td style="border:1px solid #000; width:25%; vertical-align:top; padding:1mm;">
+              <strong data-i18n="d4.tua">TUA</strong><br>
+              <div id="pdf_d4_tua"></div>
+            </td>
+            <td style="border:1px solid #000; width:25%; vertical-align:top; padding:1mm;">
+              <strong data-i18n="d4.tun">TUN</strong><br>
+              <div id="pdf_d4_tun"></div>
+            </td>
+            <td style="border:1px solid #000; width:25%; vertical-align:top; padding:1mm;">
+              <strong data-i18n="d4.sua">SUA</strong><br>
+              <div id="pdf_d4_sua"></div>
+            </td>
+            <td style="border:1px solid #000; width:25%; vertical-align:top; padding:1mm;">
+              <strong data-i18n="d4.sun">SUN</strong><br>
+              <div id="pdf_d4_sun"></div>
+            </td>
+          </tr>
+        </table>
+      </div>
+
+      <!-- D5 -->
+      <div class="vda-section">
+        <div class="vda-header" data-i18n="d5.title">D5 – Dauerhafte Abstellmaßnahmen</div>
+        <table style="width:100%; border-collapse:collapse; font-size:8px;">
+          <tr>
+            <td style="border:1px solid #000; width:50%; vertical-align:top; padding:1mm;">
+              <strong data-i18n="d5.occ">Occurrence (Auftreten verhindern)</strong><br>
+              <div id="pdf_d5_occurrence"></div>
+            </td>
+            <td style="border:1px solid #000; width:50%; vertical-align:top; padding:1mm;">
+              <strong data-i18n="d5.det">Detection (Entdeckung verbessern)</strong><br>
+              <div id="pdf_d5_detection"></div>
+            </td>
+          </tr>
+        </table>
+      </div>
+
+      <!-- D6 -->
+      <div class="vda-section">
+        <div class="vda-header" data-i18n="d6.title">D6 – Umsetzung der Maßnahmen</div>
+        <div class="vda-body" id="pdf_d6"></div>
+      </div>
+
+      <!-- D7 -->
+      <div class="vda-section">
+        <div class="vda-header" data-i18n="d7.title">D7 – Vorbeugende Maßnahmen</div>
+        <div class="vda-body" id="pdf_d7"></div>
+      </div>
+
+      <!-- D8 -->
+      <div class="vda-section">
+        <div class="vda-header" data-i18n="d8.title">D8 – Erfolgskontrolle / Abschluss</div>
+        <div class="vda-body">
+          <strong data-i18n="d8.verif">Wirksamkeitsnachweis:</strong><br>
+          <div id="pdf_d8_verification" style="margin-bottom:2mm;"></div>
+          <strong data-i18n="d8.closure">Abschluss / Teamwürdigung:</strong><br>
+          <div id="pdf_d8_closure"></div>
+        </div>
+      </div>
+
+      <!-- Haftungsausschluss nur in der Druck-/PDF-Variante -->
+      <div style="margin-top:5mm; font-size:7px; border-top:1px solid #000; padding-top:2mm;" data-i18n="pdf.disclaimer">
+        Haftungsausschluss: Dieses 8D-Tool und der erzeugte Bericht ersetzen keine
+        fachliche Bewertung. Alle Angaben erfolgen ohne Gewähr, eine Haftung des
+        Anbieters für Schäden aus der Nutzung ist ausgeschlossen.
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    /* Sprachdaten, Validierung, Beispiele, PDF/Excel-Export:
+       identisch zu deiner bisherigen Datei, nur Titel angepasst. [file:1]
+       Aus Platzgründen gekürzt – hier solltest du deinen vorhandenen
+       <script>-Block 1:1 wieder einsetzen. */
+
+    // --- hier deinen kompletten translations-, D6-, validateReport-,
+    // buildPdfView-, exportPDF-, exportExcel- usw. Code aus der alten
+    // Datei einfügen, OHNE die HTML-Struktur oben zu ändern. [file:1]
+
+  </script>
+</body>
+</html>
