@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>juracon 8D Bericht</title>
+  <style>
+    :root {
+      --jura-watermark-opacity: 0.25;
+      --jura-max-width: 960px;
+      --jura-font: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: var(--jura-font);
+      background: #f4f4f4;
+      color: #111;
+    }
+
+    .page {
+      min-height: 100vh;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    .card {
+      position: relative;
+      width: 100%;
+      max-width: var(--jura-max-width);
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 4px 18px rgba(0, 0, 0, 0.08);
+      padding: 32px 32px 24px;
+      overflow: hidden;
+    }
+
+    .card::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: url("juracon-logo.png") center center no-repeat;
+      background-size: 260px auto;
+      opacity: var(--jura-watermark-opacity);
+      z-index: -1;
+      pointer-events: none;
+    }
+
+    h1 { margin: 0 0 4px; font-size: 1.5rem; }
+    .subtitle { margin: 0 0 16px; font-size: 0.9rem; color: #555; }
+
+    .info {
+      font-size: 0.85rem;
+      color: #666;
+      margin-bottom: 12px;
+    }
+
+    .info strong { font-weight: 600; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px 24px;
+      margin-bottom: 16px;
+    }
+
+    label {
+      font-size: 0.8rem;
+      font-weight: 600;
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    input[type="text"],
+    input[type="date"],
+    textarea,
+    select {
+      width: 100%;
+      font: inherit;
+      font-size: 0.9rem;
+      padding: 6px 8px;
+      border-radius: 4px;
+      border: 1px solid #ccc;
+      background: rgba(255, 255, 255, 0.9);
+    }
+
+    textarea {
+      min-height: 72px;
+      resize: vertical;
+    }
+
+    .section {
+      margin: 12px 0;
+      padding-top: 8px;
+      border-top: 1px solid #e0e0e0;
+    }
+
+    .section-title {
+      font-size: 0.95rem;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .hint-label {
+      font-size: 0.75rem;
+      color: #777;
+      margin-top: 2px;
+    }
+
+    .actions {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-top: 18px;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .actions-left {
+      max-width: 360px;
+      font-size: 0.78rem;
+      color: #777;
+    }
+
+    .actions-right {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      justify-content: flex-end;
+    }
+
+    button {
+      cursor: pointer;
+      font: inherit;
+      font-size: 0.9rem;
+      border-radius: 4px;
+      border: 1px solid transparent;
+      padding: 6px 10px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn-primary {
+      background: #0071c2;
+      color: #fff;
+      border-color: #005fa1;
+    }
+
+    .btn-primary:hover { background: #005fa1; }
+
+    .btn-secondary {
+      background: #f5f5f5;
+      color: #333;
+      border-color: #ccc;
+    }
+
+    .btn-secondary:hover { background: #e8e8e8; }
+
+    .btn-reset {
+      background: #fbeaea;
+      color: #a40000;
+      border-color: #e0b3b3;
+    }
+
+    .btn-reset:hover { background: #f5d1d1; }
+
+    .btn-reset svg { width: 14px; height: 14px; }
+
+    @media (max-width: 640px) {
+      .card { padding: 20px 16px 16px; }
+      .actions { flex-direction: column; }
+      .actions-right { justify-content: flex-start; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <main class="card" id="juracon-8d-form">
+      <header>
+        <h1>juracon 8D Bericht</h1>
+        <p class="subtitle">Systematische Problemlösung nach 8D‑Methode</p>
+        <p class="info">
+          <strong>Hinweis:</strong>
+          Das juracon‑Logo wird als Hintergrundbild/Wasserzeichen verwendet.
+          Die Prüfung dieses 8D‑Dokuments ist einmalig; jede optimierte oder geänderte Version muss erneut geprüft und freigegeben werden.
+        </p>
+      </header>
+
+      <!-- Basisdaten -->
+      <section class="section">
+        <div class="section-title">Basisdaten</div>
+        <div class="grid">
+          <div>
+            <label>Teamleiter</label>
+            <input type="text" name="teamleiter" autocomplete="off">
+          </div>
+          <div>
+            <label>Datum</label>
+            <input type="date" name="datum">
+          </div>
+          <div>
+            <label>Kunde</label>
+            <input type="text" name="kunde" autocomplete="off">
+          </div>
+        </div>
+      </section>
+
+      <!-- D2 / D3 -->
+      <section class="section">
+        <div class="section-title">D2 – Problembeschreibung</div>
+        <textarea name="d2" placeholder="Was ist passiert? Wo? Wann? Wie häufig?"></textarea>
+      </section>
+
+      <section class="section">
+        <div class="section-title">D3 – Sofortmaßnahmen (Containment)</div>
+        <textarea name="d3" placeholder="Getroffene Sofortmaßnahmen zur Absicherung des Kunden."></textarea>
+      </section>
+
+      <!-- D4 – D7 mit Pull‑Down -->
+      <section class="section">
+        <div class="section-title">D4 – Ursachenanalyse</div>
+        <label for="d4-select">Beispiele / Ausfüllvorschläge:</label>
+        <select id="d4-select" onchange="copyExample(this, 'd4-text')">
+          <option value="">Bitte Beispiel auswählen …</option>
+          <option>
+Fehlerhafte Arbeitsanweisung: Prüfpunkte unvollständig beschrieben (Methodenfehler).
+          </option>
+          <option>
+Unzureichende Schulung des Bedieners: Prozessschritt falsch verstanden (Menschenfaktor).
+          </option>
+          <option>
+Verschlissene oder falsch eingestellte Vorrichtung führte zu Maßabweichungen (Maschine).
+          </option>
+          <option>
+Messsystem ungeeignet bzw. falsch kalibriert, falsche Gut/Schlecht‑Entscheidung (Measurement).
+          </option>
+          <option>
+Falsches Material bzw. falsche Charge verwendet (Material).
+          </option>
+          <option>
+Fehlende Prozessfreigabe nach Änderung von Parametern (Management/Prozess).
+          </option>
+          <option>
+Fehler im CAQ/ERP‑Stamm (falsche Prüfpläne, Prüfintervalle oder Toleranzen hinterlegt).
+          </option>
+          <option>
+Unzureichende Risikobetrachtung im FMEA, Ursache nicht bewertet oder ohne Maßnahme.
+          </option>
+        </select>
+        <div class="hint-label">Die Auswahl wird in das Textfeld übernommen und kann dort angepasst werden.</div>
+        <textarea id="d4-text" name="d4"></textarea>
+      </section>
+
+      <section class="section">
+        <div class="section-title">D5 – Auswahl der dauerhaften Abstellmaßnahmen</div>
+        <label for="d5-select">Beispiele / Ausfüllvorschläge:</label>
+        <select id="d5-select" onchange="copyExample(this, 'd5-text')">
+          <option value="">Bitte Beispiel auswählen …</option>
+          <option>
+Arbeitsanweisung überarbeitet, Prüfkriterien eindeutig beschrieben, Version im DMS freigegeben.
+          </option>
+          <option>
+Zusatzschulung für alle betroffenen Mitarbeiter inkl. Wirksamkeitsnachweis durchgeführt.
+          </option>
+          <option>
+Werkzeug/Vorrichtung instandgesetzt bzw. neu beschafft; Einstellanweisung dokumentiert.
+          </option>
+          <option>
+Messmittelkonzept überarbeitet, geeignetes Messsystem eingeführt und regelmäßig kalibriert.
+          </option>
+          <option>
+Materialfreigabeprozess angepasst, Wareneingangsprüfung für kritische Merkmale ergänzt.
+          </option>
+          <option>
+Prozessparameter festgelegt und im Rezept/Steuerungssystem gegen unbefugte Änderungen gesichert.
+          </option>
+          <option>
+Elektronische Prüfpläne im CAQ/ERP aktualisiert, automatische Prüfplanverteilung eingerichtet.
+          </option>
+          <option>
+FMEA aktualisiert, Risikoprioritätszahl reduziert, neue Präventions‑ und Entdeckungsmaßnahmen eingeführt.
+          </option>
+        </select>
+        <div class="hint-label">Die Auswahl wird in das Textfeld übernommen und kann dort angepasst werden.</div>
+        <textarea id="d5-text" name="d5"></textarea>
+      </section>
+
+      <section class="section">
+        <div class="section-title">D6 – Umsetzung und Wirksamkeitsprüfung</div>
+        <label for="d6-select">Beispiele / Ausfüllvorschläge:</label>
+        <select id="d6-select" onchange="copyExample(this, 'd6-text')">
+          <option value="">Bitte Beispiel auswählen …</option>
+          <option>
+Abstellmaßnahmen im Produktionsplan umgesetzt, betroffene Linien umgestellt und dokumentiert.
+          </option>
+          <option>
+100‑%‑Kontrolle über definierten Zeitraum, kein weiterer Fehler beim Kunden nachweisbar.
+          </option>
+          <option>
+Statistische Auswertung (z.B. PPM, cpk) zeigt stabile Fähigkeit nach Umsetzung der Maßnahmen.
+          </option>
+          <option>
+Prozess‑Audit nach VDA/ISO durchgeführt, keine Abweichungen zu den definierten Maßnahmen.
+          </option>
+          <option>
+Rückmeldungen des Kunden über definierte Beobachtungsphase ohne neue Reklamation.
+          </option>
+          <option>
+Mitarbeiterbefragung/Beobachtung bestätigt, dass neue Arbeitsanweisungen verstanden und angewendet werden.
+          </option>
+          <option>
+Rückverfolgbarkeit lückenlos nachweisbar, Fehleranteile transparent über Kennzahlen überwacht.
+          </option>
+          <option>
+Lessons Learned im Teammeeting vorgestellt, Maßnahmen in Standardprozessen verankert.
+          </option>
+        </select>
+        <div class="hint-label">Die Auswahl wird in das Textfeld übernommen und kann dort angepasst werden.</div>
+        <textarea id="d6-text" name="d6"></textarea>
+      </section>
+
+      <section class="section">
+        <div class="section-title">D7 – Verhinderung der Wiederholung</div>
+        <label for="d7-select">Beispiele / Ausfüllvorschläge:</label>
+        <select id="d7-select" onchange="copyExample(this, 'd7-text')">
+          <option value="">Bitte Beispiel auswählen …</option>
+          <option>
+Aufnahme der Ursachen und Maßnahmen in die Design‑ und Prozess‑FMEA ähnlicher Produkte/Prozesse.
+          </option>
+          <option>
+Änderung der Zeichnungen/Spezifikationen inkl. Freigabe durch Kunde und interne Stellen.
+          </option>
+          <option>
+Ergänzung verbindlicher Checklisten für Neuanläufe, Prozessänderungen und Werkzeugwechsel.
+          </option>
+          <option>
+Anpassung des Schulungskonzepts; regelmäßige Auffrischungen und Wirksamkeitskontrollen eingeführt.
+          </option>
+          <option>
+QM‑Systemdokumentation (Arbeitsanweisungen, Prozessbeschreibungen) aktualisiert und veröffentlicht.
+          </option>
+          <option>
+Einführung zusätzlicher Poka‑Yoke‑Mechanismen oder technischer Verriegelungen im Prozess.
+          </option>
+          <option>
+Definition von Eskalationsregeln und Frühwarnindikatoren in Kennzahlen‑/Reporting‑Systemen.
+          </option>
+          <option>
+Eintrag im Lessons‑Learned‑Pool; Nutzung bei zukünftigen Projekten verbindlich festgelegt.
+          </option>
+        </select>
+        <div class="hint-label">Die Auswahl wird in das Textfeld übernommen und kann dort angepasst werden.</div>
+        <textarea id="d7-text" name="d7"></textarea>
+      </section>
+
+      <footer class="actions">
+        <div class="actions-left">
+          Reset‑Knopf: setzt alle Eingaben dieses 8D‑Formulars auf den Ursprungszustand zurück (nicht gespeicherte Daten gehen verloren).  
+          „Entwurf speichern“ nutzt den lokalen Browser‑Speicher (nur auf diesem Gerät/Browser).
+        </div>
+        <div class="actions-right">
+          <button type="button" class="btn-secondary" onclick="saveDraft()">Entwurf speichern</button>
+          <button type="button" class="btn-secondary" onclick="loadDraft()">Entwurf laden</button>
+          <button type="button" class="btn-secondary" onclick="downloadJson()">Als Datei speichern</button>
+          <button type="button" class="btn-reset" onclick="resetForm()">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path fill="currentColor"
+                d="M12 5V2L7 7l5 5V9c2.76 0 5 2.24 5 5a5 5 0 0 1-5 5 5 5 0 0 1-4.9-4H6a7 7 0 0 0 6 6 7 7 0 0 0 7-7c0-3.87-3.13-7-7-7z" />
+            </svg>
+            Reset
+          </button>
+          <button type="submit" class="btn-primary">
+            Speichern / Senden
+          </button>
+        </div>
+      </footer>
+    </main>
+  </div>
+
+  <script>
+    const FORM_ID = "juracon-8d-form";
+    const STORAGE_KEY = "juracon-8d-draft";
+
+    function copyExample(selectEl, targetId) {
+      const value = selectEl.value;
+      if (!value) return;
+      const textarea = document.getElementById(targetId);
+      textarea.value = value.trim();
+    }
+
+    function getFormData() {
+      const root = document.getElementById(FORM_ID);
+      const fields = root.querySelectorAll("input, textarea, select");
+      const data = {};
+      fields.forEach(el => {
+        if (!el.name) return;
+        if (el.type === "checkbox" || el.type === "radio") {
+          data[el.name] = el.checked;
+        } else {
+          data[el.name] = el.value;
+        }
+      });
+      return data;
+    }
+
+    function setFormData(data) {
+      const root = document.getElementById(FORM_ID);
+      const fields = root.querySelectorAll("input, textarea, select");
+      fields.forEach(el => {
+        if (!el.name || !(el.name in data)) return;
+        if (el.type === "checkbox" || el.type === "radio") {
+          el.checked = !!data[el.name];
+        } else {
+          el.value = data[el.name];
+        }
+      });
+    }
+
+    function downloadJson() {
+      const data = getFormData();
+      const json = JSON.stringify(data, null, 2);
+      const blob = new Blob([json], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const date = new Date().toISOString().slice(0,10);
+      a.href = url;
+      a.download = `juracon-8d-${date}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    function saveDraft() {
+      const data = getFormData();
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        alert("Entwurf wurde lokal gespeichert.");
+      } catch (e) {
+        alert("Speichern im Browser nicht möglich (LocalStorage).");
+      }
+    }
+
+    function loadDraft() {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) {
+        alert("Kein gespeicherter Entwurf gefunden.");
+        return;
+      }
+      try {
+        const data = JSON.parse(raw);
+        setFormData(data);
+        alert("Entwurf wurde geladen.");
+      } catch (e) {
+        alert("Gespeicherte Daten sind ungültig.");
+      }
+    }
+
+    function resetForm() {
+      if (confirm("Alle Eingaben im 8D‑Formular wirklich zurücksetzen?")) {
+        const root = document.getElementById(FORM_ID);
+        const fields = root.querySelectorAll("input, textarea, select");
+        fields.forEach(el => {
+          if (el.tagName.toLowerCase() === "select") {
+            el.selectedIndex = 0;
+          } else if (el.type === "checkbox" || el.type === "radio") {
+            el.checked = false;
+          } else {
+            el.value = "";
+          }
+        });
+      }
+    }
+  </script>
+</body>
+</html>
